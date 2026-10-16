@@ -33,6 +33,14 @@ NextCharge는 구독을 결제일이 가까운 순서로 보여주고, 각각 �
 
 ## 설치
 
+### Homebrew
+
+```bash
+brew install --cask mobrava/tap/nextcharge
+```
+
+### 직접 다운로드
+
 [Releases](https://github.com/mobrava/NextCharge/releases/latest)에서 최신 `.dmg`를 받아 열고, NextCharge를 응용 프로그램 폴더로 끌어다 놓으면 돼요. Apple Developer ID로 서명하고 Apple 공증을 받아서 보안 경고 없이 열려요.
 
 ## 사용법
@@ -84,7 +92,7 @@ NextCharge는 구독을 결제일이 가까운 순서로 보여주고, 각각 �
 
 `~/Library/Application Support/NextCharge/subscriptions.json`에 있어요. 앱이 1.5초마다 파일을 확인해서 밖에서 고친 내용도 바로 반영해요. 형식이 잘못된 JSON이면 기존 목록을 그대로 둬요. 필드 설명은 [영어 README](README.md#where-is-my-data-and-can-i-edit-it-directly)에 있어요.
 
-모두 지우려면 앱을 끄고 `NextCharge` 폴더를 지우면 돼요. 앱까지 지우려면 휴지통으로 옮기면 돼요.
+모두 지우려면 앱을 끄고 `NextCharge` 폴더를 지우면 돼요. 앱까지 지우려면 휴지통으로 옮기거나, Homebrew로 설치했다면 `brew uninstall --cask nextcharge`를 실행하면 돼요.
 
 ### 로고가 엉뚱하게 나와요
 

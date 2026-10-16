@@ -33,6 +33,14 @@ It is free, open source, and runs on macOS 14 Sonoma or later. No account, no se
 
 ## Install
 
+### Homebrew
+
+```bash
+brew install --cask mobrava/tap/nextcharge
+```
+
+### Direct download
+
 Download the latest `.dmg` from [Releases](https://github.com/mobrava/NextCharge/releases/latest), open it, and drag NextCharge into Applications. The DMG is signed with an Apple Developer ID and notarized by Apple, so it opens without a security warning.
 
 ## Usage
@@ -109,7 +117,7 @@ It is in `~/Library/Application Support/NextCharge/subscriptions.json`. NextChar
 }
 ```
 
-To remove everything, quit the app and delete the `NextCharge` folder. To uninstall, drag the app to the Trash as well.
+To remove everything, quit the app and delete the `NextCharge` folder. To uninstall, drag the app to the Trash as well, or run `brew uninstall --cask nextcharge` if you installed it with Homebrew.
 
 ### The wrong logo shows up
 
