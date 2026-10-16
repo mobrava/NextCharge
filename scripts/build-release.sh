@@ -44,6 +44,7 @@ for size in 16 32 128 256 512; do
   sips -z $((size*2)) $((size*2)) Resources/icon-1024.png --out "${ICONSET}/icon_${size}x${size}@2x.png" >/dev/null
 done
 iconutil -c icns "${ICONSET}" -o "${APP}/Contents/Resources/AppIcon.icns"
+cp -R Resources/*.lproj "${APP}/Contents/Resources/"
 
 echo "==> Signing (${SIGN_IDENTITY})"
 if [ "${SIGN_IDENTITY}" = "-" ]; then

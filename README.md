@@ -1,52 +1,67 @@
 # NextCharge
 
-구독 결제일과 월 고정비를 보여주는 macOS 앱. 외부 의존성 없는 SwiftUI 앱이고, 데이터는 내 맥에만 저장된다.
+A small macOS app that shows when each subscription charges next and what they cost per month. SwiftUI only, no dependencies, no account, no network except fetching site logos. Your data stays in one JSON file on your Mac.
 
-- 다음 결제일 순으로 정렬, D-day 표시
-- 원화 기준 월 고정비, 연 환산, 30일 안에 나갈 금액
-- 결제 N일 전과 당일 알림 (무료 체험 종료일 포함)
-- 메뉴바에서 바로 확인
-- 그룹(폴더)으로 묶고 그룹별 월 합계 보기. 사이드바로 끌어다 놓아 이동
-- 구독마다 알림 일수 따로 지정 (기본값 / 당일만 / N일 전 / 끔)
-- USD 금액은 설정에서 입력한 환율로 환산
-- 관리 페이지 URL(또는 로고 도메인)로 사이트 로고 자동 표시
+English and Korean (follows your macOS language).
 
-데이터 위치: `~/Library/Application Support/NextCharge/subscriptions.json`
+- Sorted by next charge, with a countdown
+- Monthly total, yearly total, and what's due in the next 30 days, per group or overall
+- Groups (folders) with their own monthly totals; drag a subscription onto a group to move it
+- Reminders N days before and on the day, including free-trial end dates; per-subscription override
+- Menu bar summary
+- KRW or USD as the base currency, with a manual exchange rate
+- Site logos from the manage-page URL (or a custom logo domain)
 
-앱이 이 파일을 1.5초마다 확인해서, 밖에서 고쳐도 화면과 알림에 바로 반영한다. 잘못된 JSON이면 무시하고 기존 목록을 유지한다.
+Requires macOS 14 or later.
 
-```json
+## Install
+
+Download the DMG from Releases, open it, and drag NextCharge to Applications. Builds are signed with Developer ID and notarized.
+
+## Data
+
+`~/Library/Application Support/NextCharge/subscriptions.json`
+
+The app checks this file every 1.5 seconds, so edits made outside the app (by hand, a script, or an AI agent) show up right away. Invalid JSON is ignored and the current list is kept.
+
+```jsonc
 {
   "id": "UUID",
   "name": "Typecast API Lite",
   "price": 15,
   "currency": "USD",            // KRW | USD
   "cycle": "monthly",           // weekly | monthly | quarterly | yearly
-  "billingAnchor": "2026-10-15T15:00:00Z", // 결제일 아무거나 하나. 오늘 이전이면 이미 낸 것으로 보고 다음 주기 계산
+  "billingAnchor": "2026-10-15T15:00:00Z", // any billing date; today or earlier counts as already paid
   "status": "active",           // active | trial | cancelled
-  "endDate": null,              // trial: 체험 종료일, cancelled: 이용 종료일
-  "paymentMethod": "카드 1379",
+  "endDate": null,              // trial: trial end, cancelled: access end
+  "paymentMethod": "Card 1379",
   "manageURL": "https://typecast.ai/developers/api/billing",
-  "iconDomain": null,           // 로고를 다른 도메인에서 가져올 때
-  "group": "fconlab",           // 그룹 이름, 없으면 null
-  "remindDays": null,           // null = 기본값, 0 = 당일만, -1 = 끔, N = N일 전
+  "iconDomain": null,           // fetch the logo from another domain
+  "group": "fconlab",           // null = no group
+  "remindDays": null,           // null = app default, 0 = day of only, -1 = off, N = N days before
   "notes": ""
 }
 ```
 
-## 빌드
+## Build
 
-Xcode Command Line Tools만 있으면 된다. macOS 14 이상.
-
-```sh
-scripts/build-release.sh   # ad-hoc 서명, build/NextCharge-1.0.0.dmg
-```
-
-Developer ID 서명과 노타리:
+Only the Xcode Command Line Tools are needed.
 
 ```sh
-SIGN_IDENTITY="Developer ID Application: ..." NOTARY_PROFILE=<notarytool profile> scripts/build-release.sh
+scripts/build-release.sh   # ad-hoc signed, build/NextCharge-<version>.dmg
 ```
+
+Developer ID signing and notarization:
+
+```sh
+SIGN_IDENTITY="Developer ID Application: ..." NOTARY_PROFILE=<notarytool profile> VERSION=1.3.0 scripts/build-release.sh
+```
+
+Translations live in `Resources/<lang>.lproj/Localizable.strings`. Keys are the English strings.
+
+## 한국어
+
+구독 결제일과 월 고정비를 보여주는 macOS 앱이에요. 맥 언어가 한국어면 한국어로 나와요. 그룹별 합계, 결제 전 알림, 메뉴바 요약을 지원하고 데이터는 내 맥의 JSON 파일 하나에만 저장돼요.
 
 ## License
 

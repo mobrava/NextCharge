@@ -1,5 +1,20 @@
 import Foundation
 
+func L(_ key: String) -> String { NSLocalizedString(key, comment: "") }
+
+func L(_ key: String, _ args: CVarArg...) -> String {
+    String(format: NSLocalizedString(key, comment: ""), locale: Locale.current, arguments: args)
+}
+
+/// "3 days before" / "3일 전"; 0 means day-of only.
+func daysBefore(_ n: Int) -> String {
+    switch n {
+    case 0: return L("Day of only")
+    case 1: return L("1 day before")
+    default: return L("%d days before", n)
+    }
+}
+
 enum Currency: String, Codable, CaseIterable, Identifiable {
     case krw = "KRW"
     case usd = "USD"
@@ -15,10 +30,10 @@ enum Cycle: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .weekly: return "매주"
-        case .monthly: return "매월"
-        case .quarterly: return "3개월"
-        case .yearly: return "매년"
+        case .weekly: return L("Weekly")
+        case .monthly: return L("Monthly")
+        case .quarterly: return L("Every 3 months")
+        case .yearly: return L("Yearly")
         }
     }
 
@@ -49,9 +64,9 @@ enum Status: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .active: return "사용 중"
-        case .trial: return "무료 체험"
-        case .cancelled: return "해지함"
+        case .active: return L("Active")
+        case .trial: return L("Free trial")
+        case .cancelled: return L("Cancelled")
         }
     }
 }
@@ -118,14 +133,16 @@ struct Subscription: Identifiable, Codable, Equatable {
         }
     }
 
-    func monthlyKRW(usdRate: Double) -> Double {
-        guard status == .active else { return 0 }
-        let krw = currency == .usd ? price * usdRate : price
-        return krw * cycle.perMonth
+    /// One charge converted to the base currency. usdRate = how many KRW one USD buys.
+    func charge(in base: Currency, usdRate: Double) -> Double {
+        if currency == base { return price }
+        guard usdRate > 0 else { return 0 }
+        return currency == .usd ? price * usdRate : price / usdRate
     }
 
-    func chargeKRW(usdRate: Double) -> Double {
-        currency == .usd ? price * usdRate : price
+    func monthly(in base: Currency, usdRate: Double) -> Double {
+        guard status == .active else { return 0 }
+        return charge(in: base, usdRate: usdRate) * cycle.perMonth
     }
 }
 
@@ -138,12 +155,16 @@ enum Fmt {
         return currency.symbol + (f.string(from: NSNumber(value: value)) ?? "\(value)")
     }
 
-    static func krw(_ value: Double) -> String { money(value.rounded(), .krw) }
+    /// Totals: whole won, or dollars with cents only when needed.
+    static func total(_ value: Double, _ base: Currency) -> String {
+        money(base == .krw ? value.rounded() : (value * 100).rounded() / 100, base)
+    }
 
     static func date(_ date: Date) -> String {
         let f = DateFormatter()
-        f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year) ? "M월 d일 (E)" : "yyyy년 M월 d일"
+        f.locale = Locale.current
+        let sameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
+        f.setLocalizedDateFormatFromTemplate(sameYear ? "MMMdE" : "yMMMd")
         return f.string(from: date)
     }
 
@@ -154,8 +175,8 @@ enum Fmt {
 
     static func dday(_ date: Date) -> String {
         let d = daysUntil(date)
-        if d == 0 { return "오늘" }
-        if d > 0 { return "D-\(d)" }
-        return "D+\(-d)"
+        if d == 0 { return L("Today") }
+        if d > 0 { return L("in %dd", d) }
+        return L("%dd ago", -d)
     }
 }

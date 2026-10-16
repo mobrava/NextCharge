@@ -24,7 +24,7 @@ struct MainView: View {
         .frame(minWidth: 720, minHeight: 460)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { editing = newSubscription() } label: { Label("추가", systemImage: "plus") }
+                Button { editing = newSubscription() } label: { Label(L("Add"), systemImage: "plus") }
                     .keyboardShortcut("n")
             }
         }
@@ -32,9 +32,9 @@ struct MainView: View {
             EditView(draft: sub, isNew: !store.items.contains { $0.id == sub.id })
         }
         .alert(groupPrompt?.title ?? "", isPresented: Binding(get: { groupPrompt != nil }, set: { if !$0 { groupPrompt = nil } })) {
-            TextField("이름", text: $groupName)
-            Button("취소", role: .cancel) { groupPrompt = nil }
-            Button("확인") {
+            TextField(L("Name"), text: $groupName)
+            Button(L("Cancel"), role: .cancel) { groupPrompt = nil }
+            Button(L("OK")) {
                 switch groupPrompt {
                 case .new:
                     store.addGroup(groupName)
@@ -62,9 +62,9 @@ struct MainView: View {
             Divider()
             if list.isEmpty {
                 ContentUnavailableView {
-                    Label("구독 없음", systemImage: "creditcard")
+                    Label(L("No subscriptions"), systemImage: "creditcard")
                 } actions: {
-                    Button("구독 추가") { editing = newSubscription() }
+                    Button(L("Add Subscription")) { editing = newSubscription() }
                 }
                 .frame(maxHeight: .infinity)
             } else {
@@ -74,7 +74,7 @@ struct MainView: View {
                 List(selection: $selection) {
                     Section { ForEach(live) { row($0) } }
                     if !cancelled.isEmpty {
-                        Section("해지함") { ForEach(cancelled) { row($0) } }
+                        Section(L("Cancelled")) { ForEach(cancelled) { row($0) } }
                     }
                 }
                 .listStyle(.inset)
@@ -86,8 +86,8 @@ struct MainView: View {
 
     private var title: String {
         switch current {
-        case .all: return "전체"
-        case .ungrouped: return "그룹 없음"
+        case .all: return L("All")
+        case .ungrouped: return L("No Group")
         case .group(let g): return g
         }
     }
@@ -100,20 +100,20 @@ struct MainView: View {
             .onTapGesture(count: 2) { editing = s }
             .draggable(s.id.uuidString)
             .contextMenu {
-                Button("수정") { editing = s }
+                Button(L("Edit")) { editing = s }
                 if let url = URL(string: s.manageURL), !s.manageURL.isEmpty {
-                    Button("관리 페이지 열기") { NSWorkspace.shared.open(url) }
+                    Button(L("Open Manage Page")) { NSWorkspace.shared.open(url) }
                 }
-                Menu("그룹으로 이동") {
+                Menu(L("Move to Group")) {
                     let ids = selection.contains(s.id) ? Array(selection) : [s.id]
                     ForEach(store.groups, id: \.self) { g in
                         Button(g) { store.move(ids, to: g) }.disabled(s.group == g && ids.count == 1)
                     }
                     Divider()
-                    Button("그룹 없음") { store.move(ids, to: nil) }
+                    Button(L("No Group")) { store.move(ids, to: nil) }
                 }
                 if s.status != .cancelled {
-                    Button("해지함으로 표시") {
+                    Button(L("Mark as Cancelled")) {
                         var c = s
                         c.status = .cancelled
                         if c.endDate == nil { c.endDate = s.nextCharge() }
@@ -121,7 +121,7 @@ struct MainView: View {
                     }
                 }
                 Divider()
-                Button("삭제", role: .destructive) { store.delete(s.id) }
+                Button(L("Delete"), role: .destructive) { store.delete(s.id) }
             }
     }
 }
@@ -130,8 +130,8 @@ enum GroupPrompt: Equatable {
     case new, rename(String)
     var title: String {
         switch self {
-        case .new: return "새 그룹"
-        case .rename: return "그룹 이름 바꾸기"
+        case .new: return L("New Group")
+        case .rename: return L("Rename Group")
         }
     }
 }
@@ -144,27 +144,27 @@ struct Sidebar: View {
 
     var body: some View {
         List(selection: $scope) {
-            item("전체", icon: "tray.full", scope: .all, group: nil)
-            Section("그룹") {
+            item(L("All"), icon: "tray.full", scope: .all, group: nil)
+            Section(L("Groups")) {
                 ForEach(store.groups, id: \.self) { g in
                     item(g, icon: "folder", scope: .group(g), group: g)
                         .contextMenu {
-                            Button("이름 바꾸기") { onRename(g) }
-                            Button("그룹 삭제 (구독은 그룹 없음으로)", role: .destructive) {
+                            Button(L("Rename")) { onRename(g) }
+                            Button(L("Delete Group (keeps subscriptions)"), role: .destructive) {
                                 store.removeGroup(g)
                                 if scope == .group(g) { scope = .all }
                             }
                         }
                 }
                 if store.items.contains(where: { ($0.group ?? "").isEmpty }) {
-                    item("그룹 없음", icon: "tray", scope: .ungrouped, group: "")
+                    item(L("No Group"), icon: "tray", scope: .ungrouped, group: "")
                 }
             }
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
             HStack {
-                Button(action: onNewGroup) { Label("새 그룹", systemImage: "folder.badge.plus") }
+                Button(action: onNewGroup) { Label(L("New Group"), systemImage: "folder.badge.plus") }
                     .buttonStyle(.borderless)
                 Spacer()
             }
@@ -179,7 +179,7 @@ struct Sidebar: View {
             Spacer()
             let total = store.monthlyTotal(store.items(in: scope))
             if total > 0 {
-                Text(Fmt.krw(total)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                Text(Fmt.total(total, store.baseCurrency)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
             }
         }
         .tag(scope)
@@ -199,9 +199,9 @@ struct Header: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 28) {
             let monthly = store.monthlyTotal(list)
-            figure("월 고정비", Fmt.krw(monthly), big: true)
-            figure("연 환산", Fmt.krw(monthly * 12))
-            figure("30일 안에 결제", Fmt.krw(store.next30Days(list)))
+            figure(L("Monthly total"), Fmt.total(monthly, store.baseCurrency), big: true)
+            figure(L("Per year"), Fmt.total(monthly * 12, store.baseCurrency))
+            figure(L("Due in 30 days"), Fmt.total(store.next30Days(list), store.baseCurrency))
             Spacer()
             if let n = store.nextUp(list) {
                 VStack(alignment: .trailing, spacing: 2) {
@@ -229,7 +229,7 @@ struct Header: View {
 
 func priceText(_ s: Subscription) -> String {
     if s.price > 0 { return Fmt.money(s.price, s.currency) }
-    return s.status == .trial ? "무료" : "금액 미입력"
+    return s.status == .trial ? L("Free") : L("No amount")
 }
 
 func ddayColor(_ date: Date) -> Color {
@@ -248,7 +248,7 @@ struct SubscriptionRow: View {
         HStack(spacing: 12) {
             SubscriptionIcon(sub: sub)
             VStack(alignment: .leading, spacing: 2) {
-                Text(sub.name.isEmpty ? "이름 없음" : sub.name)
+                Text(sub.name.isEmpty ? L("Untitled") : sub.name)
                     .font(.body.weight(.medium))
                     .strikethrough(sub.status == .cancelled, color: .secondary)
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
@@ -258,8 +258,8 @@ struct SubscriptionRow: View {
                 Text(priceText(sub))
                     .monospacedDigit()
                     .foregroundStyle(sub.status == .cancelled || sub.price == 0 ? .secondary : .primary)
-                if sub.currency == .usd && sub.price > 0 {
-                    Text("≈ " + Fmt.krw(sub.chargeKRW(usdRate: store.usdRate)))
+                if sub.currency != store.baseCurrency && sub.price > 0 {
+                    Text("≈ " + Fmt.total(sub.charge(in: store.baseCurrency, usdRate: store.usdRate), store.baseCurrency))
                         .font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
@@ -275,9 +275,9 @@ struct SubscriptionRow: View {
     private var subtitle: String {
         var parts: [String] = []
         switch sub.status {
-        case .active: parts.append("\(sub.cycle.label) · \(Fmt.date(sub.nextCharge())) 결제")
-        case .trial: parts.append("체험 \(sub.endDate.map(Fmt.date) ?? "") 종료")
-        case .cancelled: parts.append("\(sub.endDate.map(Fmt.date) ?? "") 까지 이용")
+        case .active: parts.append(L("%1$@ · renews %2$@", sub.cycle.label, Fmt.date(sub.nextCharge())))
+        case .trial: parts.append(L("Trial ends %@", sub.endDate.map(Fmt.date) ?? ""))
+        case .cancelled: parts.append(L("Access until %@", sub.endDate.map(Fmt.date) ?? ""))
         }
         if !sub.paymentMethod.isEmpty { parts.append(sub.paymentMethod) }
         if showGroup, let g = sub.group, !g.isEmpty { parts.append(g) }
@@ -324,9 +324,9 @@ struct EditView: View {
         VStack(spacing: 0) {
             Form {
                 Section {
-                    TextField("이름", text: $draft.name)
+                    TextField(L("Name"), text: $draft.name)
                     HStack {
-                        TextField("금액", value: $draft.price, format: .number)
+                        TextField(L("Amount"), value: $draft.price, format: .number)
                         Picker("", selection: $draft.currency) {
                             ForEach(Currency.allCases) { Text($0.rawValue).tag($0) }
                         }
@@ -334,64 +334,64 @@ struct EditView: View {
                         .labelsHidden()
                         .frame(width: 110)
                     }
-                    Picker("주기", selection: $draft.cycle) {
+                    Picker(L("Cycle"), selection: $draft.cycle) {
                         ForEach(Cycle.allCases) { Text($0.label).tag($0) }
                     }
-                    DatePicker("결제일", selection: $draft.billingAnchor, displayedComponents: .date)
+                    DatePicker(L("Billing date"), selection: $draft.billingAnchor, displayedComponents: .date)
                     HStack {
-                        TextField("그룹", text: Binding(get: { draft.group ?? "" },
+                        TextField(L("Group"), text: Binding(get: { draft.group ?? "" },
                                                        set: { draft.group = $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }),
-                                  prompt: Text("없음"))
+                                  prompt: Text(L("None")))
                         if !store.groups.isEmpty {
                             Menu {
                                 ForEach(store.groups, id: \.self) { g in Button(g) { draft.group = g } }
                                 Divider()
-                                Button("그룹 없음") { draft.group = nil }
+                                Button(L("No Group")) { draft.group = nil }
                             } label: { Image(systemName: "folder") }
                             .menuStyle(.borderlessButton)
                             .fixedSize()
                         }
                     }
-                    Picker("알림", selection: $draft.remindDays) {
-                        Text("기본 (\(store.leadDays)일 전)").tag(Int?.none)
-                        Text("당일만").tag(Int?.some(0))
-                        ForEach([1, 3, 7, 14], id: \.self) { d in Text("\(d)일 전").tag(Int?.some(d)) }
-                        Text("끔").tag(Int?.some(-1))
+                    Picker(L("Reminder"), selection: $draft.remindDays) {
+                        Text(L("Default (%@)", daysBefore(store.leadDays))).tag(Int?.none)
+                        Text(daysBefore(0)).tag(Int?.some(0))
+                        ForEach([1, 3, 7, 14], id: \.self) { d in Text(daysBefore(d)).tag(Int?.some(d)) }
+                        Text(L("Off")).tag(Int?.some(-1))
                     }
                 }
                 Section {
-                    Picker("상태", selection: $draft.status) {
+                    Picker(L("Status"), selection: $draft.status) {
                         ForEach(Status.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     if draft.status != .active {
-                        DatePicker(draft.status == .trial ? "체험 종료일" : "이용 종료일",
+                        DatePicker(draft.status == .trial ? L("Trial ends") : L("Access ends"),
                                    selection: Binding(get: { draft.endDate ?? draft.nextCharge() },
                                                       set: { draft.endDate = $0 }),
                                    displayedComponents: .date)
                     }
                 }
                 Section {
-                    TextField("결제 수단", text: $draft.paymentMethod, prompt: Text("카드 끝자리 1234"))
-                    TextField("관리 페이지", text: $draft.manageURL, prompt: Text("https://"))
+                    TextField(L("Payment method"), text: $draft.paymentMethod, prompt: Text(L("Card ending 1234")))
+                    TextField(L("Manage page"), text: $draft.manageURL, prompt: Text("https://"))
                     HStack {
-                        TextField("로고 도메인", text: Binding(get: { draft.iconDomain ?? "" },
+                        TextField(L("Logo domain"), text: Binding(get: { draft.iconDomain ?? "" },
                                                           set: { draft.iconDomain = $0.isEmpty ? nil : $0 }),
                                   prompt: Text(manageHost ?? "slack.com"))
                         SubscriptionIcon(sub: draft, size: 22)
                     }
-                    TextField("메모", text: $draft.notes, axis: .vertical).lineLimit(2...4)
+                    TextField(L("Notes"), text: $draft.notes, axis: .vertical).lineLimit(2...4)
                 }
             }
             .formStyle(.grouped)
 
             HStack {
                 if !isNew {
-                    Button("삭제", role: .destructive) { store.delete(draft.id); dismiss() }
+                    Button(L("Delete"), role: .destructive) { store.delete(draft.id); dismiss() }
                 }
                 Spacer()
-                Button("취소") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button(isNew ? "추가" : "저장") {
+                Button(L("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(isNew ? L("Add") : L("Save")) {
                     if draft.status == .active { draft.endDate = nil }
                     store.upsert(draft)
                     dismiss()
@@ -414,14 +414,14 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text(Fmt.krw(store.monthlyTotal))
+                Text(Fmt.total(store.monthlyTotal, store.baseCurrency))
                     .font(.system(size: 22, weight: .bold, design: .rounded)).monospacedDigit()
-                Text("/ 월").foregroundStyle(.secondary)
+                Text(L("/ mo")).foregroundStyle(.secondary)
             }
             Divider()
             let upcoming = store.sorted.filter { $0.status != .cancelled }.prefix(6)
             if upcoming.isEmpty {
-                Text("구독 없음").foregroundStyle(.secondary)
+                Text(L("No subscriptions")).foregroundStyle(.secondary)
             }
             ForEach(Array(upcoming)) { s in
                 HStack {
@@ -438,12 +438,12 @@ struct MenuBarView: View {
             }
             Divider()
             HStack {
-                Button("열기") {
+                Button(L("Open")) {
                     openWindow(id: "main")
                     NSApp.activate(ignoringOtherApps: true)
                 }
                 Spacer()
-                Button("종료") { NSApp.terminate(nil) }
+                Button(L("Quit")) { NSApp.terminate(nil) }
             }
         }
         .padding(14)
@@ -458,20 +458,24 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            TextField("1 USD =", value: $store.usdRate, format: .number)
-            Stepper("결제 \(store.leadDays)일 전에 알림", value: $store.leadDays, in: 0...14)
+            Picker(L("Base currency"), selection: $store.baseCurrency) {
+                ForEach(Currency.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            TextField("1 USD = KRW", value: $store.usdRate, format: .number)
+            Stepper(store.leadDays == 0 ? L("Remind on the day") : L("Remind %@", daysBefore(store.leadDays)), value: $store.leadDays, in: 0...14)
                 .onChange(of: store.leadDays) { store.reschedule() }
-            Stepper("알림 시각 \(store.notifyHour)시", value: $store.notifyHour, in: 0...23)
+            Stepper(L("Reminder time %d:00", store.notifyHour), value: $store.notifyHour, in: 0...23)
                 .onChange(of: store.notifyHour) { store.reschedule() }
-            LabeledContent("알림 권한") {
+            LabeledContent(L("Notifications")) {
                 HStack {
                     Text(store.notificationStatus).foregroundStyle(.secondary)
-                    Button("테스트 알림") { store.sendTestNotification() }
+                    Button(L("Send Test")) { store.sendTestNotification() }
                 }
             }
-            Toggle("로그인 시 실행", isOn: Binding(get: { store.launchAtLogin }, set: { store.launchAtLogin = $0 }))
-            LabeledContent("데이터") {
-                Button("Finder에서 보기") { NSWorkspace.shared.open(store.dataFolder) }
+            Toggle(L("Launch at login"), isOn: Binding(get: { store.launchAtLogin }, set: { store.launchAtLogin = $0 }))
+            LabeledContent(L("Data")) {
+                Button(L("Show in Finder")) { NSWorkspace.shared.open(store.dataFolder) }
             }
         }
         .formStyle(.grouped)

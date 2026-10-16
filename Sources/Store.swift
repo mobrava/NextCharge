@@ -13,6 +13,9 @@ final class Store: ObservableObject {
     @Published var items: [Subscription] = [] { didSet { save(); reschedule() } }
 
     @AppStorage("usdRate") var usdRate: Double = 1400 { willSet { objectWillChange.send() } }
+    @AppStorage("baseCurrency") var baseCurrency: Currency = Locale.current.region?.identifier == "KR" ? .krw : .usd {
+        willSet { objectWillChange.send() }
+    }
     @AppStorage("leadDays") var leadDays: Int = 3 { willSet { objectWillChange.send() } }
     @AppStorage("notifyHour") var notifyHour: Int = 10 { willSet { objectWillChange.send() } }
 
@@ -80,7 +83,7 @@ final class Store: ObservableObject {
         extraGroups = extraGroups.map { $0 == old ? n : $0 }
     }
 
-    /// Removes the folder; its subscriptions move to "그룹 없음".
+    /// Removes the folder; its subscriptions become ungrouped.
     func removeGroup(_ name: String) {
         items = items.map { var s = $0; if s.group == name { s.group = nil }; return s }
         extraGroups.removeAll { $0 == name }
@@ -101,7 +104,7 @@ final class Store: ObservableObject {
 
     var sorted: [Subscription] { sorted(items) }
 
-    func monthlyTotal(_ list: [Subscription]) -> Double { list.reduce(0) { $0 + $1.monthlyKRW(usdRate: usdRate) } }
+    func monthlyTotal(_ list: [Subscription]) -> Double { list.reduce(0) { $0 + $1.monthly(in: baseCurrency, usdRate: usdRate) } }
     var monthlyTotal: Double { monthlyTotal(items) }
 
     /// Charges that will actually hit the card in the next 30 days (trials converting included).
@@ -111,9 +114,9 @@ final class Store: ObservableObject {
         for s in list {
             switch s.status {
             case .active:
-                for d in s.upcomingCharges(6) where d <= limit { total += s.chargeKRW(usdRate: usdRate) }
+                for d in s.upcomingCharges(6) where d <= limit { total += s.charge(in: baseCurrency, usdRate: usdRate) }
             case .trial:
-                if let end = s.endDate, end <= limit, s.price > 0 { total += s.chargeKRW(usdRate: usdRate) }
+                if let end = s.endDate, end <= limit, s.price > 0 { total += s.charge(in: baseCurrency, usdRate: usdRate) }
             case .cancelled:
                 break
             }
@@ -170,16 +173,16 @@ final class Store: ObservableObject {
         }
     }
 
-    @Published var notificationStatus: String = "확인 중"
+    @Published var notificationStatus: String = L("Checking")
 
     func refreshNotificationStatus() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             let text: String
             switch settings.authorizationStatus {
-            case .authorized, .provisional: text = settings.alertSetting == .enabled ? "허용됨" : "허용됨 (배너 꺼짐)"
-            case .denied: text = "거부됨"
-            case .notDetermined: text = "아직 안 물어봄"
-            default: text = "알 수 없음"
+            case .authorized, .provisional: text = settings.alertSetting == .enabled ? L("Allowed") : L("Allowed (banners off)")
+            case .denied: text = L("Denied")
+            case .notDetermined: text = L("Not asked yet")
+            default: text = L("Unknown")
             }
             Task { @MainActor in self.notificationStatus = text }
         }
@@ -202,8 +205,8 @@ final class Store: ObservableObject {
             }
             guard granted else { return }
             let content = UNMutableNotificationContent()
-            content.title = "NextCharge 테스트"
-            content.body = "결제 알림이 이렇게 와."
+            content.title = L("NextCharge test")
+            content.body = L("Payment reminders will look like this.")
             content.sound = .default
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "test-\(UUID())", content: content, trigger: trigger))
@@ -239,19 +242,19 @@ final class Store: ObservableObject {
                 for (n, date) in s.upcomingCharges(3).enumerated() {
                     if leadDays > 0 {
                         let lead = cal.date(byAdding: .day, value: -leadDays, to: date)!
-                        add(id: "\(s.id)-c\(n)", title: "\(s.name) \(leadDays)일 뒤 결제",
-                            body: "\(Fmt.date(date)) \(price)", on: lead)
+                        add(id: "\(s.id)-c\(n)", title: L("%1$@ renews %2$@", s.name, Fmt.date(date)),
+                            body: price, on: lead)
                     }
-                    add(id: "\(s.id)-d\(n)", title: "오늘 \(s.name) 결제", body: price, on: date)
+                    add(id: "\(s.id)-d\(n)", title: L("%@ renews today", s.name), body: price, on: date)
                 }
             case .trial:
                 guard let end = s.endDate else { continue }
-                let tail = s.price > 0 ? "이후 \(price) 결제" : "끝나면 무료로 돌아감"
+                let tail = s.price > 0 ? L("Then %@", price) : L("Reverts to free")
                 if leadDays > 0 {
                     let lead = cal.date(byAdding: .day, value: -leadDays, to: end)!
-                    add(id: "\(s.id)-t0", title: "\(s.name) 체험 \(leadDays)일 남음", body: "\(Fmt.date(end)) 종료, \(tail)", on: lead)
+                    add(id: "\(s.id)-t0", title: L("%1$@ trial ends %2$@", s.name, Fmt.date(end)), body: tail, on: lead)
                 }
-                add(id: "\(s.id)-t1", title: "오늘 \(s.name) 체험 종료", body: tail, on: end)
+                add(id: "\(s.id)-t1", title: L("%@ trial ends today", s.name), body: tail, on: end)
             case .cancelled:
                 continue
             }
