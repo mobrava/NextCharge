@@ -479,8 +479,12 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 380)
-        .onAppear { store.refreshNotificationStatus() }
-        .fixedSize(horizontal: false, vertical: true)
+        .scrollDisabled(true)
+        .frame(width: 400, height: 322)
+        .onAppear {
+            store.refreshNotificationStatus()
+            // Don't open with the rate field selected.
+            DispatchQueue.main.async { NSApp.keyWindow?.makeFirstResponder(nil) }
+        }
     }
 }
