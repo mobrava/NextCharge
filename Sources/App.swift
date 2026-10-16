@@ -10,7 +10,7 @@ struct NextChargeApp: App {
                 .environmentObject(store)
                 .onAppear { store.requestNotificationPermission() }
         }
-        .defaultSize(width: 620, height: 560)
+        .defaultSize(width: 860, height: 580)
 
         MenuBarExtra {
             MenuBarView().environmentObject(store)

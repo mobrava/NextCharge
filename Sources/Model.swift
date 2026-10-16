@@ -72,6 +72,10 @@ struct Subscription: Identifiable, Codable, Equatable {
     var notes: String = ""
     /// Optional override for where the logo comes from (e.g. "slack.com").
     var iconDomain: String? = nil
+    /// Folder this subscription belongs to (e.g. "fconlab"). nil = no group.
+    var group: String? = nil
+    /// Days before the charge to remind. nil = app default, 0 = day-of only, -1 = off.
+    var remindDays: Int? = nil
 
     /// Host used to look up the logo: the override if set, otherwise the manage URL's host.
     var logoHost: String? {

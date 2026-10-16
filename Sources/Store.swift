@@ -1,7 +1,12 @@
+import AppKit
 import Foundation
 import ServiceManagement
 import SwiftUI
 import UserNotifications
+
+enum Scope: Hashable {
+    case all, ungrouped, group(String)
+}
 
 @MainActor
 final class Store: ObservableObject {
@@ -42,22 +47,68 @@ final class Store: ObservableObject {
         load()
     }
 
+    // MARK: Groups
+
+    /// Empty folders created from the sidebar before anything is moved into them.
+    @Published var extraGroups: [String] = UserDefaults.standard.stringArray(forKey: "extraGroups") ?? [] {
+        didSet { UserDefaults.standard.set(extraGroups, forKey: "extraGroups") }
+    }
+
+    var groups: [String] {
+        let used = items.compactMap { $0.group?.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return Array(Set(used + extraGroups)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    func items(in scope: Scope) -> [Subscription] {
+        switch scope {
+        case .all: return items
+        case .ungrouped: return items.filter { ($0.group ?? "").isEmpty }
+        case .group(let g): return items.filter { $0.group == g }
+        }
+    }
+
+    func addGroup(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty, !groups.contains(n) else { return }
+        extraGroups.append(n)
+    }
+
+    func renameGroup(_ old: String, to new: String) {
+        let n = new.trimmingCharacters(in: .whitespaces)
+        guard !n.isEmpty, n != old else { return }
+        items = items.map { var s = $0; if s.group == old { s.group = n }; return s }
+        extraGroups = extraGroups.map { $0 == old ? n : $0 }
+    }
+
+    /// Removes the folder; its subscriptions move to "그룹 없음".
+    func removeGroup(_ name: String) {
+        items = items.map { var s = $0; if s.group == name { s.group = nil }; return s }
+        extraGroups.removeAll { $0 == name }
+    }
+
+    func move(_ ids: [UUID], to group: String?) {
+        items = items.map { var s = $0; if ids.contains(s.id) { s.group = group }; return s }
+    }
+
     // MARK: Derived
 
-    var sorted: [Subscription] {
-        items.sorted { a, b in
+    func sorted(_ list: [Subscription]) -> [Subscription] {
+        list.sorted { a, b in
             if (a.status == .cancelled) != (b.status == .cancelled) { return b.status == .cancelled }
             return a.keyDate() < b.keyDate()
         }
     }
 
-    var monthlyTotal: Double { items.reduce(0) { $0 + $1.monthlyKRW(usdRate: usdRate) } }
+    var sorted: [Subscription] { sorted(items) }
+
+    func monthlyTotal(_ list: [Subscription]) -> Double { list.reduce(0) { $0 + $1.monthlyKRW(usdRate: usdRate) } }
+    var monthlyTotal: Double { monthlyTotal(items) }
 
     /// Charges that will actually hit the card in the next 30 days (trials converting included).
-    var next30Days: Double {
+    func next30Days(_ list: [Subscription]) -> Double {
         let limit = Calendar.current.date(byAdding: .day, value: 30, to: Date())!
         var total = 0.0
-        for s in items {
+        for s in list {
             switch s.status {
             case .active:
                 for d in s.upcomingCharges(6) where d <= limit { total += s.chargeKRW(usdRate: usdRate) }
@@ -70,8 +121,8 @@ final class Store: ObservableObject {
         return total
     }
 
-    var nextUp: Subscription? {
-        items.filter { $0.status != .cancelled }.min { $0.keyDate() < $1.keyDate() }
+    func nextUp(_ list: [Subscription]) -> Subscription? {
+        list.filter { $0.status != .cancelled }.min { $0.keyDate() < $1.keyDate() }
     }
 
     // MARK: Mutations
@@ -119,6 +170,46 @@ final class Store: ObservableObject {
         }
     }
 
+    @Published var notificationStatus: String = "확인 중"
+
+    func refreshNotificationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let text: String
+            switch settings.authorizationStatus {
+            case .authorized, .provisional: text = settings.alertSetting == .enabled ? "허용됨" : "허용됨 (배너 꺼짐)"
+            case .denied: text = "거부됨"
+            case .notDetermined: text = "아직 안 물어봄"
+            default: text = "알 수 없음"
+            }
+            Task { @MainActor in self.notificationStatus = text }
+        }
+    }
+
+    /// Asks for permission if needed, then fires a notification in 2 seconds.
+    func sendTestNotification() {
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            Task { @MainActor in
+                self.refreshNotificationStatus()
+                if granted {
+                    self.reschedule()
+                } else {
+                    // Already denied: only System Settings can turn it back on.
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+            }
+            guard granted else { return }
+            let content = UNMutableNotificationContent()
+            content.title = "NextCharge 테스트"
+            content.body = "결제 알림이 이렇게 와."
+            content.sound = .default
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
+            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "test-\(UUID())", content: content, trigger: trigger))
+        }
+    }
+
     func reschedule() {
         let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
@@ -140,20 +231,26 @@ final class Store: ObservableObject {
 
         for s in items {
             let price = Fmt.money(s.price, s.currency)
+            let leadDays = s.remindDays ?? self.leadDays
+            if leadDays < 0 { continue }
             switch s.status {
             case .active:
                 // Three cycles ahead so reminders survive weeks without opening the app.
                 for (n, date) in s.upcomingCharges(3).enumerated() {
-                    let lead = cal.date(byAdding: .day, value: -leadDays, to: date)!
-                    add(id: "\(s.id)-c\(n)", title: "\(s.name) \(leadDays)일 뒤 결제",
-                        body: "\(Fmt.date(date)) \(price)", on: lead)
+                    if leadDays > 0 {
+                        let lead = cal.date(byAdding: .day, value: -leadDays, to: date)!
+                        add(id: "\(s.id)-c\(n)", title: "\(s.name) \(leadDays)일 뒤 결제",
+                            body: "\(Fmt.date(date)) \(price)", on: lead)
+                    }
                     add(id: "\(s.id)-d\(n)", title: "오늘 \(s.name) 결제", body: price, on: date)
                 }
             case .trial:
                 guard let end = s.endDate else { continue }
-                let lead = cal.date(byAdding: .day, value: -leadDays, to: end)!
                 let tail = s.price > 0 ? "이후 \(price) 결제" : "끝나면 무료로 돌아감"
-                add(id: "\(s.id)-t0", title: "\(s.name) 체험 \(leadDays)일 남음", body: "\(Fmt.date(end)) 종료, \(tail)", on: lead)
+                if leadDays > 0 {
+                    let lead = cal.date(byAdding: .day, value: -leadDays, to: end)!
+                    add(id: "\(s.id)-t0", title: "\(s.name) 체험 \(leadDays)일 남음", body: "\(Fmt.date(end)) 종료, \(tail)", on: lead)
+                }
                 add(id: "\(s.id)-t1", title: "오늘 \(s.name) 체험 종료", body: tail, on: end)
             case .cancelled:
                 continue
