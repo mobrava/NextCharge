@@ -13,12 +13,32 @@ final class Store: ObservableObject {
 
     private let fileURL: URL
     private var loading = false
+    private var lastData: Data?
+    private var lastModified: Date?
+    private var watcher: Timer?
 
     init() {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("NextCharge", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         fileURL = dir.appendingPathComponent("subscriptions.json")
+        load()
+        watchFile()
+    }
+
+    /// Picks up edits made to the JSON file outside the app (by hand or by an agent).
+    private func watchFile() {
+        watcher = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.reloadIfChanged() }
+        }
+    }
+
+    private func reloadIfChanged() {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: fileURL.path)
+        let mtime = attrs?[.modificationDate] as? Date
+        guard mtime != lastModified else { return }
+        lastModified = mtime
+        guard let data = try? Data(contentsOf: fileURL), data != lastData else { return }
         load()
     }
 
@@ -70,7 +90,11 @@ final class Store: ObservableObject {
         guard let data = try? Data(contentsOf: fileURL) else { return }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        items = (try? decoder.decode([Subscription].self, from: data)) ?? []
+        // Keep the current list if an external edit left the file half-written or invalid.
+        guard let decoded = try? decoder.decode([Subscription].self, from: data) else { return }
+        lastData = data
+        lastModified = (try? FileManager.default.attributesOfItem(atPath: fileURL.path))?[.modificationDate] as? Date
+        items = decoded
     }
 
     private func save() {
@@ -78,7 +102,11 @@ final class Store: ObservableObject {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        if let data = try? encoder.encode(items) { try? data.write(to: fileURL, options: .atomic) }
+        if let data = try? encoder.encode(items) {
+            try? data.write(to: fileURL, options: .atomic)
+            lastData = data
+            lastModified = (try? FileManager.default.attributesOfItem(atPath: fileURL.path))?[.modificationDate] as? Date
+        }
     }
 
     var dataFolder: URL { fileURL.deletingLastPathComponent() }

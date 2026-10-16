@@ -70,6 +70,18 @@ struct Subscription: Identifiable, Codable, Equatable {
     var paymentMethod: String = ""
     var manageURL: String = ""
     var notes: String = ""
+    /// Optional override for where the logo comes from (e.g. "slack.com").
+    var iconDomain: String? = nil
+
+    /// Host used to look up the logo: the override if set, otherwise the manage URL's host.
+    var logoHost: String? {
+        if let d = iconDomain?.trimmingCharacters(in: .whitespaces), !d.isEmpty {
+            return URL(string: d.contains("://") ? d : "https://" + d)?.host?.lowercased()
+        }
+        let raw = manageURL.trimmingCharacters(in: .whitespaces)
+        guard !raw.isEmpty else { return nil }
+        return URL(string: raw.contains("://") ? raw : "https://" + raw)?.host?.lowercased()
+    }
 
     /// Next billing date. A future anchor is the next charge itself. An anchor of today or
     /// earlier counts as already paid, so the next charge is the first later recurrence that

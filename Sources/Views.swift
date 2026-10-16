@@ -124,7 +124,7 @@ struct SubscriptionRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Monogram(name: sub.name, dimmed: sub.status == .cancelled)
+            SubscriptionIcon(sub: sub)
             VStack(alignment: .leading, spacing: 2) {
                 Text(sub.name.isEmpty ? "이름 없음" : sub.name)
                     .font(.body.weight(.medium))
@@ -165,13 +165,14 @@ struct SubscriptionRow: View {
 struct Monogram: View {
     let name: String
     var dimmed = false
+    var size: CGFloat = 30
 
     var body: some View {
         let letter = name.trimmingCharacters(in: .whitespaces).first.map { String($0).uppercased() } ?? "?"
         Text(letter)
-            .font(.system(size: 14, weight: .bold, design: .rounded))
+            .font(.system(size: size * 0.47, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
-            .frame(width: 30, height: 30)
+            .frame(width: size, height: size)
             .background(Circle().fill(color.opacity(dimmed ? 0.35 : 1)))
     }
 
@@ -189,6 +190,12 @@ struct EditView: View {
     @Environment(\.dismiss) private var dismiss
     @State var draft: Subscription
     let isNew: Bool
+
+    private var manageHost: String? {
+        var s = draft
+        s.iconDomain = nil
+        return s.logoHost
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -224,6 +231,12 @@ struct EditView: View {
                 Section {
                     TextField("결제 수단", text: $draft.paymentMethod, prompt: Text("카드 끝자리 1234"))
                     TextField("관리 페이지", text: $draft.manageURL, prompt: Text("https://"))
+                    HStack {
+                        TextField("로고 도메인", text: Binding(get: { draft.iconDomain ?? "" },
+                                                          set: { draft.iconDomain = $0.isEmpty ? nil : $0 }),
+                                  prompt: Text(manageHost ?? "slack.com"))
+                        SubscriptionIcon(sub: draft, size: 22)
+                    }
                     TextField("메모", text: $draft.notes, axis: .vertical).lineLimit(2...4)
                 }
             }
@@ -269,6 +282,7 @@ struct MenuBarView: View {
             }
             ForEach(Array(upcoming)) { s in
                 HStack {
+                    SubscriptionIcon(sub: s, size: 18)
                     Text(s.name).lineLimit(1)
                     Spacer()
                     Text(priceText(s)).foregroundStyle(.secondary).monospacedDigit()
