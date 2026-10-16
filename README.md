@@ -139,7 +139,7 @@ That builds a universal app, signed ad hoc, and a DMG in `build/`. To sign with 
 ```bash
 SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
 NOTARY_PROFILE=<notarytool keychain profile> \
-VERSION=1.3.1 scripts/build-release.sh
+VERSION=1.3.2 scripts/build-release.sh
 ```
 
 The app is SwiftUI in four files under `Sources/`. Translations are in `Resources/<language>.lproj/Localizable.strings`, keyed by the English text.

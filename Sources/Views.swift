@@ -51,6 +51,7 @@ struct MainView: View {
 
     private func newSubscription() -> Subscription {
         var s = Subscription()
+        s.currency = store.baseCurrency
         if case .group(let g) = current { s.group = g }
         return s
     }
@@ -456,13 +457,18 @@ struct MenuBarView: View {
 struct SettingsView: View {
     @EnvironmentObject var store: Store
 
+    private var mixedCurrencies: Bool { store.items.contains { $0.currency != store.baseCurrency } }
+
     var body: some View {
         Form {
             Picker(L("Base currency"), selection: $store.baseCurrency) {
                 ForEach(Currency.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
-            TextField("1 USD = KRW", value: $store.usdRate, format: .number)
+            // Only matters when subscriptions mix KRW and USD.
+            if mixedCurrencies {
+                TextField("1 USD = KRW", value: $store.usdRate, format: .number)
+            }
             Stepper(store.leadDays == 0 ? L("Remind on the day") : L("Remind %@", daysBefore(store.leadDays)), value: $store.leadDays, in: 0...14)
                 .onChange(of: store.leadDays) { store.reschedule() }
             Stepper(L("Reminder time %d:00", store.notifyHour), value: $store.notifyHour, in: 0...23)
@@ -480,7 +486,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .scrollDisabled(true)
-        .frame(width: 400, height: 322)
+        .frame(width: 400, height: mixedCurrencies ? 322 : 285)
         .onAppear {
             store.refreshNotificationStatus()
             // Don't open with the rate field selected.
